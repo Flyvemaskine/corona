@@ -1,6 +1,15 @@
+#!/usr/bin/env python3
+
 import pandas as pd
+import datetime as dt
+import seaborn as sns
 import os
 import subprocess
+import matplotlib.pyplot as plt
+import re
+import numpy as np
+
+state = pd.read_csv('/Users/CharlesFederici/corona_python/admin/states.csv')
 
 # Step 1: Refresh Github
 subprocess.Popen('git -C /Users/CharlesFederici/corona_python/data/COVID-19 pull', shell=True)
@@ -36,7 +45,50 @@ case_reports_a=case_reports_a.rename(str.lower, axis='columns') \
 case_reports_b=case_reports_b.rename(str.lower, axis='columns') \
                              .rename(columns={'lat':'latitude',
                                               'long_':'longitude'}) \
+                             .groupby(['province_state','country_region','report_date'], as_index=False) \
+                             .agg({'confirmed':'sum',
+                                   'deaths':'sum',
+                                   'recovered':'sum',
+                                   'longitude':'mean',
+                                   'latitude':'mean'}) \
                              [['province_state', 'country_region', 'confirmed',
                                'deaths', 'recovered', 'report_date', 'latitude',
                                'longitude']]
 case_reports_joined = pd.concat([case_reports_a, case_reports_b], axis=0)
+
+# Step 4: Create Incrementals
+case_reports_prior_day = case_reports_joined.copy()
+case_reports_prior_day['report_date'] = case_reports_prior_day['report_date'] + dt.timedelta(days=1)
+case_reports_prior_day = case_reports_prior_day.rename({'confirmed':'confirmed_pd',
+                                                        'deaths':'deaths_pd',
+                                                        'recovered':'recovered_pd'}, axis="columns") \
+                                               .drop(['latitude', 'longitude'], axis=1)
+case_reports_joined = case_reports_joined.merge(case_reports_prior_day,
+                                                left_on=['province_state','country_region','report_date'],
+                                                right_on=['province_state','country_region','report_date'])
+case_reports_joined['incremental_confirmed'] = case_reports_joined['confirmed'] - case_reports_joined['confirmed_pd']
+case_reports_joined['incremental_deaths'] = case_reports_joined['deaths'] - case_reports_joined['deaths_pd']
+case_reports_joined['incremental_recovered'] = case_reports_joined['recovered'] - case_reports_joined['recovered_pd']
+
+def make_keep_col(df, province_col, country_col):
+    df['keep'] = np.where(df[country_col] == 'US',
+                          np.where(df[province_col].isin(state.State),
+                                   1, 0),1)
+    return(df)
+
+case_reports_joined = make_keep_col(case_reports_joined, 'province_state', 'country_region')
+
+#Step 5: Create country set
+case_reports_country = case_reports_joined[case_reports_joined['keep'] == 1] \
+                            .groupby(['country_region', 'report_date']) \
+                            .agg({'confirmed':'sum',
+                                  'deaths':'sum',
+                                  'recovered':'sum',
+                                  'incremental_confirmed':'sum',
+                                  'incremental_deaths':'sum',
+                                  'incremental_recovered':'sum'})
+
+case_reports_states=case_reports_joined[(case_reports_joined['country_region']=='US') & (case_reports_joined['keep']==1)]
+
+case_reports_country.to_csv('/Users/CharlesFederici/corona_python/data/by_country.csv')
+case_reports_states.to_csv('/Users/CharlesFederici/corona_python/data/by_state.csv')
