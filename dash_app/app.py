@@ -4,14 +4,17 @@ import dash_html_components as html
 from dash.dependencies import Input, Output
 import pandas as pd
 
-state_cases = pd.read_csv("/Users/CharlesFederici/corona_python/data/by_state.csv")
-states = pd.read_csv("/Users/CharlesFederici/corona_python/admin/states.csv")
+external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
+
+state_cases = pd.read_csv("by_state.csv")
+states = pd.read_csv("states.csv")
 states = states.State.tolist()
 
 metrics = ['confirmed','deaths','recovered',
            'incremental_confirmed','incremental_deaths','incremental_recovered']
 
-app = dash.Dash(__name__)
+app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+server = app.server
 
 app.layout = html.Div([
     html.Div([
