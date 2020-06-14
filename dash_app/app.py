@@ -6,6 +6,7 @@ import pandas as pd
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 
+# have to figure out the best way to get data into heroku
 state_cases = pd.read_csv("by_state.csv")
 states = pd.read_csv("states.csv")
 states = states.State.tolist()
