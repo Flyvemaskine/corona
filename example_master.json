@@ -1,0 +1,176 @@
+
+{
+  "state_name":"state",
+  "incremental_plots":{
+      "deaths":{
+        "data":[{
+            "x":[],
+            "y":[],
+            "type":"bar"
+        }],
+        "layout": {
+            "xaxis" :{
+                "title":"Date"
+            },
+            "yaxis": {
+                "title":"Deaths",
+                "type":"linear",
+                "rangemode":"nonnegative"
+            },
+            "margin":{
+                "l": 40, "b": 40, "t": 10, "r": 0
+            },
+            "hovermode":"closest"
+          }
+      },
+      "confirmed":{
+        "data":[{
+            "x":[],
+            "y":[],
+            "type":"bar"
+        }],
+        "layout": {
+            "xaxis" :{
+                "title":"Date"
+            },
+            "yaxis": {
+                "title":"Cases",
+                "type":"linear",
+                "rangemode":"nonnegative"
+            },
+            "margin":{
+                "l": 40, "b": 40, "t": 10, "r": 0
+            },
+            "hovermode":"closest"
+          }
+        },
+        "testing_rate":{
+          "data":[{
+              "x":[],
+              "y":[],
+              "type":"bar"
+          }],
+          "layout": {
+              "xaxis" :{
+                  "title":"Date"
+              },
+              "yaxis": {
+                  "title":"Positive Rate",
+                  "type":"linear",
+                  "rangemode":"nonnegative"
+              },
+              "margin":{
+                  "l": 40, "b": 40, "t": 10, "r": 0
+              },
+              "hovermode":"closest"
+            }
+          },
+          "tests_administered":{
+            "data":[{
+                "x":[],
+                "y":[],
+                "type":"bar"
+            }],
+            "layout": {
+                "xaxis" :{
+                    "title":"Date"
+                },
+                "yaxis": {
+                    "title":"Tests Administered",
+                    "type":"linear",
+                    "rangemode":"nonnegative"
+                },
+                "margin":{
+                    "l": 40, "b": 40, "t": 10, "r": 0
+                },
+                "hovermode":"closest"
+              }
+            }
+    },
+    "cumulative_plots":{
+      "deaths":{
+        "data":[{
+            "x":[],
+            "y":[],
+            "type":"bar"
+        }],
+        "layout": {
+            "xaxis" :{
+                "title":"Date"
+            },
+            "yaxis": {
+                "title":"Deaths",
+                "type":"linear",
+                "rangemode":"nonnegative"
+            },
+            "margin":{
+                "l": 40, "b": 40, "t": 10, "r": 0
+            },
+            "hovermode":"closest"
+          }
+      },
+      "confirmed":{
+        "data":[{
+            "x":[],
+            "y":[],
+            "type":"bar"
+        }],
+        "layout": {
+            "xaxis" :{
+                "title":"Date"
+            },
+            "yaxis": {
+                "title":"Cases",
+                "type":"linear",
+                "rangemode":"nonnegative"
+            },
+            "margin":{
+                "l": 40, "b": 40, "t": 10, "r": 0
+            },
+            "hovermode":"closest"
+          }
+        },
+        "testing_rate":{
+          "data":[{
+              "x":[],
+              "y":[],
+              "type":"bar"
+          }],
+          "layout": {
+              "xaxis" :{
+                  "title":"Date"
+              },
+              "yaxis": {
+                  "title":"Positive Rate",
+                  "type":"linear",
+                  "rangemode":"nonnegative"
+              },
+              "margin":{
+                  "l": 40, "b": 40, "t": 10, "r": 0
+              },
+              "hovermode":"closest"
+            }
+          },
+          "tests_administered":{
+            "data":[{
+                "x":[],
+                "y":[],
+                "type":"bar"
+            }],
+            "layout": {
+                "xaxis" :{
+                    "title":"Date"
+                },
+                "yaxis": {
+                    "title":"Tests Administered",
+                    "type":"linear",
+                    "rangemode":"nonnegative"
+                },
+                "margin":{
+                    "l": 40, "b": 40, "t": 10, "r": 0
+                },
+                "hovermode":"closest"
+              }
+            }
+    }
+}

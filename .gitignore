@@ -1,3 +1,13 @@
 data
 dash_app/*
 !dash_app/app.py
+!dash_app/states.csv
+!dash_app/index.py
+!dash_app/apps/
+!dash_app/Procfile
+!dash_app/requirements.txt
+dash_app/apps/__pycache__
+mongo.ipynb
+.ipynb_checkpoints/*
+vars.env
+interactive_jhu.ipynb
