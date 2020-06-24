@@ -197,7 +197,7 @@ def create_plot_cases_us(df, example_json, country, confirmed_or_deaths, increme
         out_json["data"][0]["y"] = df[confirmed_or_deaths].tolist()
 
     out_json["data"][0]["x"] = df['report_date'].tolist()
-    out_json["data"][0]["y"] = df[confirmed_or_deaths].tolist()
+
     out_json['data'][0]["marker"] = {}
     out_json['data'][0]["marker"]['color'] = '#494847'
 

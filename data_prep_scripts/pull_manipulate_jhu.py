@@ -57,6 +57,7 @@ def pull_missing(missing_dates):
         print("Missing date field is empty")
         return None
     def pull_day(date):
+        print("Pulling " + date)
         date_for_github = date[5:7] + "-"+ date[8:10] + "-" + date[0:4]
         github_path = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/" + date_for_github + ".csv"
         return(pd.read_csv(github_path))
@@ -128,7 +129,7 @@ def create_by_state(df):
     return(df)
 
 def create_by_country(df):
-    df = df[(df['keep'] == 1) | (df['province_state'] == "Recovered")] \
+    df = df.copy()[(df['keep'] == 1) | (df['province_state'] == "Recovered")] \
         .groupby(['country_region', 'report_date'], as_index=False) \
         .agg({'confirmed':'sum',
               'deaths':'sum',
