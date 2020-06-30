@@ -3,7 +3,7 @@
 from bson import json_util
 from datetime import date, datetime
 import dash
-from dash.dependencies import Input, Output
+from dash.dependencies import Input, Output, State
 import dash_core_components as dcc
 import dash_html_components as html
 import json
@@ -14,6 +14,7 @@ from app import app, server
 #from apps import by_state, countrywide
 from urllib.request import urlopen
 import plotly.express as px
+import plotly.graph_objects as go
 
 # Dropdowns
 incrementals = ["Cumulative", "Incremental"]
@@ -45,6 +46,12 @@ states_conversion = pd.read_csv("states.csv").set_index(["Abbreviation"])
 states_conversion_dict = states_conversion.to_dict()["State"]
 
 
+states_conversion_index = states_conversion.reset_index().State.to_dict()
+states_conversion_index = dict((v,k) for k,v in states_conversion_index.items())
+
+map_date = [doc for doc in maps_collection.find({"Incremental":"Incremental", "State":"New York"}, {'_id':0, "Date":1})]
+map_date=map_date[0]['Date'].strftime("%Y-%m-%d")
+
 blank_graph={'data':[], 'layout':{'margin':{"l": 0, "b": 0, "t": 0, "r": 0}}}
 
 app.layout = html.Div([
@@ -56,12 +63,15 @@ app.layout = html.Div([
     # Row 2: About
     html.Div([
         html.Div([
-            html.P("This dashboard is intended to track the progress of COVID through the United States. Case reports are sourced daily from JHU and testing data is provided by the COVID tracking project",style={'display':'inline-block'})
+            html.P("Testing Data provided by: ",style={'display':'inline-block'}),
+            dcc.Link('COVID Tracking Project', href='https://covidtracking.com'),
+            html.Br(),
+            html.P("Case Reports Provided by: ",style={'display':'inline-block'}),
+            dcc.Link('Johns Hopkins Github', href='https://github.com/CSSEGISandData/COVID-19')
         ], className='about_app_blurb_container')
     ], className="row_two_container"),
 
     html.Div(id="state_filter", style={'display':'none'}),
-
     # Selectors
 
     html.Div([
@@ -104,8 +114,7 @@ app.layout = html.Div([
             html.P("Title", id="deaths_graph_label", className='title_bar_deaths'),
             dcc.Graph(id='deaths_plot', className='regular_graph')
         ],className='graph_container')
-    ], className='graph_grid'),
-    html.Div(id='state-filter', style={'display':'none'})
+    ], className='graph_grid')
 
 
 ],id="main_container")
@@ -125,7 +134,7 @@ def update_title_bar_labels(incremental, metric, state_filter):
         state_name = json.loads(state_filter)["points"][0]["customdata"][1]
     except TypeError:
         state_name = "CW"
-    first_label = [incremental + " " + metric + " - " + state_name]
+    first_label = [incremental + " " + metric + ": " + map_date]
     out = [(incremental + " " +  metric + " - " + state_name) for metric in metrics_list]
     out = first_label + out
     return(tuple(out))
@@ -160,11 +169,29 @@ def update_graph_testing_rate(incremental, state_filter):
     out = (mongo_query_out[0][incremental]["testing"], mongo_query_out[0][incremental]["confirmed"], mongo_query_out[0][incremental]["deaths"])
     return out
 
+def find_state_index(full_state_name):
+    return(int(states_conversion_index[full_state_name]))
+
+def add_selected_data(map, index_number="Countrywide"):
+    if index_number=="Countrywide":
+        return(map)
+    else:
+        go_map = go.Figure(map.to_dict())
+        go_map = go_map.update_traces(selectedpoints=[index_number], selected={"marker":{"opacity": 0.5}})
+        return(go_map)
+
 @app.callback(
     Output('state_map_plot', 'figure'),
     [Input('incremental-dropdown', 'value'),
-     Input('metrics-dropdown', 'value')])
-def create_map(incremental, metric):
+     Input('metrics-dropdown', 'value'),
+     Input('clear-geo', "n_clicks")],
+     [State('state_filter', 'children')])
+def create_map(incremental, metric, n_clicks, state_filter):
+    try:
+        state_filter = int(json.loads(state_filter)['points'][0]['pointIndex'])
+    except TypeError:
+        state_filter = "Countrywide"
+
     if metric == "% Positive":
         col_to_plot = "%Positive"
         colors = "Purpor"
@@ -211,34 +238,38 @@ def create_map(incremental, metric):
 
     fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0},
                       coloraxis_showscale=False)
-    fig.update_layout(clickmode='event')
+    fig.update_layout(clickmode='event+select')
+    if dash.callback_context.triggered[0]['prop_id'].split('.')[0] != 'clear-geo':
+        fig = add_selected_data(fig, state_filter)
+
     return(fig)
 
 
+# Grabs map query
 @app.callback(
     Output('state_filter', 'children'),
-    [Input('state_map_plot', 'clickData'),
+    [Input('state_map_plot', 'selectedData'),
      Input('clear-geo', 'n_clicks')])
-def display_click_data(clickData, n_clicks):
+def display_click_data(selectedData, n_clicks):
     #if clickData == None: return(None)
     #return(clickData["points"][0]["customdata"][0])
     if dash.callback_context.triggered[0]['prop_id'].split('.')[0] == 'state_map_plot':
-        return json.dumps(clickData, indent=2)
+        return json.dumps(selectedData, indent=2)
     else:
         return None
 
+# Sets Geo button to Invisible
 @app.callback(
     Output('clear-geo', 'className'),
-    [Input('state_map_plot', 'clickData'),
-     Input('clear-geo', 'n_clicks')])
-def display_click_data(clickData, n_clicks):
-    #if clickData == None: return(None)
-    #return(clickData["points"][0]["customdata"][0])
-    if dash.callback_context.triggered[0]['prop_id'].split('.')[0] == 'state_map_plot':
-        return 'geo_button_visible'
+    [Input('state_map_plot', 'selectedData'),
+    Input('clear-geo', 'n_clicks')])
+def display_click_data(selectedData, n_clicks):
+    if dash.callback_context.triggered[0]['prop_id'].split('.')[0] == 'clear-geo':
+        return('geo_button_hidden')
+    elif selectedData != None:
+        return("geo_button_visible")
     else:
         return 'geo_button_hidden'
-
 
 
 if __name__ == '__main__':

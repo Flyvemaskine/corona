@@ -138,6 +138,8 @@ def create_testing_rate_plot(df, example_json, state, incremental):
     out_json['layout']['yaxis2']['title'] = "Tests"
     out_json['layout']['yaxis2']['overlaying'] = "y"
     out_json['layout']['yaxis2']['side'] = "right"
+    out_json['layout']['yaxis2']['rangemode'] = "nonnegative"
+
 
 
     return(out_json)
