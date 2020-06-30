@@ -6,8 +6,10 @@ dash_app/*
 !dash_app/apps/
 !dash_app/Procfile
 !dash_app/requirements.txt
+!dash_app/assets
 dash_app/apps/__pycache__
 mongo.ipynb
 .ipynb_checkpoints/*
 vars.env
 interactive_jhu.ipynb
+Untitled.ipynb

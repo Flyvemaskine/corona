@@ -1,27 +1,276 @@
 #!/usr/bin/env python3
 
-from dash.dependencies import Input, Output
+from bson import json_util
+from datetime import date, datetime
+import dash
+from dash.dependencies import Input, Output, State
 import dash_core_components as dcc
 import dash_html_components as html
-
+import json
+import pandas as pd
+from pymongo import MongoClient
+import re
 from app import app, server
-from apps import by_state, countrywide
+#from apps import by_state, countrywide
+from urllib.request import urlopen
+import plotly.express as px
+import plotly.graph_objects as go
+
+# Dropdowns
+incrementals = ["Cumulative", "Incremental"]
+metrics_list = ["% Positive", "Confirmed Cases", "Deaths"]
+
+# Mongo stuff general
+def json_serial(obj):
+    """JSON serializer for objects not serializable by default json code"""
+
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    raise TypeError ("Type %s not serializable" % type(obj))
+
+env_vars = open("vars.env", "r")
+mongo_read = re.search(r'.*=(.*)\n',env_vars.readlines()[1])[1]
+mongo_client_uri = "mongodb://corona_dash_app_ro:" + mongo_read + "@ds263248.mlab.com:63248/heroku_7ggf57x7?retryWrites=false"
+
+client = MongoClient(mongo_client_uri)
+db=client["heroku_7ggf57x7"]
+
+with urlopen("https://raw.githubusercontent.com/python-visualization/folium/master/examples/data/us-states.json"
+) as response:
+    states = json.load(response)
+
+by_state_collection = db['plots']
+maps_collection = db['maps']
+
+states_conversion = pd.read_csv("states.csv").set_index(["Abbreviation"])
+states_conversion_dict = states_conversion.to_dict()["State"]
+
+
+states_conversion_index = states_conversion.reset_index().State.to_dict()
+states_conversion_index = dict((v,k) for k,v in states_conversion_index.items())
+
+map_date = [doc for doc in maps_collection.find({"Incremental":"Incremental", "State":"New York"}, {'_id':0, "Date":1})]
+map_date=map_date[0]['Date'].strftime("%Y-%m-%d")
+
+blank_graph={'data':[], 'layout':{'margin':{"l": 0, "b": 0, "t": 0, "r": 0}}}
 
 app.layout = html.Div([
-    dcc.Tabs(id='tab_container', value='countrywide', children=[
-        dcc.Tab(label='US - Countrywide', value='countrywide'),
-        dcc.Tab(label='State Detail', value='by_state'),
-    ]),
-    html.Div(id='page_details')
-])
+    html.Div([
+    # Row 1 Title
+        html.H3("US COVID Tracking")
+    ], className="row_one_container"),
 
-@app.callback(Output('page_details', 'children'),
-              [Input('tab_container', 'value')])
-def render_content(tab):
-    if tab == 'countrywide':
-        return countrywide.layout
-    elif tab == 'by_state':
-        return by_state.layout
+    # Row 2: About
+    html.Div([
+        html.Div([
+            html.P("Testing Data provided by: ",style={'display':'inline-block'}),
+            dcc.Link('COVID Tracking Project', href='https://covidtracking.com'),
+            html.Br(),
+            html.P("Case Reports Provided by: ",style={'display':'inline-block'}),
+            dcc.Link('Johns Hopkins Github', href='https://github.com/CSSEGISandData/COVID-19')
+        ], className='about_app_blurb_container')
+    ], className="row_two_container"),
+
+    html.Div(id="state_filter", style={'display':'none'}),
+    # Selectors
+
+    html.Div([
+        html.Div([html.P(["Map Metric: "])], className="dropdown_label"),
+        html.Div([
+            dcc.Dropdown(
+                id='metrics-dropdown',
+                options=[{'label':metric, 'value':metric} for metric in metrics_list],
+                value='Confirmed Cases'
+            )
+        ], className="metric_dd_container"),
+        html.Div([]),
+        html.Button('Clear Geography Filter', id='clear-geo', className='geo_button_visible'),
+        html.Div([]),
+        html.Div([html.P(["Metric Type: "])], className="dropdown_label"),
+        html.Div([
+            dcc.Dropdown(
+                id='incremental-dropdown',
+                options=[{'label':incremental,'value':incremental} for incremental in incrementals],
+                value='Cumulative')
+        ], className='incremental_dd_container'),
+
+    ], className='row_three_container'),
+    # Graphs
+
+    html.Div([
+        html.Div([
+            html.P("Title", id="map_graph_label", className="title_bar_default"),
+            dcc.Graph(id="state_map_plot", figure=blank_graph, className='regular_graph')
+        ],className="graph_container"),
+        html.Div([
+            html.P("Title", id="positive_graph_label", className="title_bar_positive"),
+            dcc.Graph(id='testing_plot', figure=blank_graph, className='regular_graph')
+        ],className="graph_container"),
+        html.Div([
+            html.P("Title", id="cases_graph_label", className="title_bar_cases"),
+            dcc.Graph(id='confirmed_cases_plot', figure=blank_graph, className='regular_graph')
+        ],className="graph_container"),
+        html.Div([
+            html.P("Title", id="deaths_graph_label", className='title_bar_deaths'),
+            dcc.Graph(id='deaths_plot', className='regular_graph')
+        ],className='graph_container')
+    ], className='graph_grid')
+
+
+],id="main_container")
+
+@app.callback(
+    [Output('map_graph_label', 'children'),
+     Output('positive_graph_label', 'children'),
+     Output('cases_graph_label', 'children'),
+     Output('deaths_graph_label','children')
+    ],
+    [Input('incremental-dropdown', 'value'),
+    Input('metrics-dropdown', 'value'),
+    Input('state_filter', 'children')]
+)
+def update_title_bar_labels(incremental, metric, state_filter):
+    try:
+        state_name = json.loads(state_filter)["points"][0]["customdata"][1]
+    except TypeError:
+        state_name = "CW"
+    first_label = [incremental + " " + metric + ": " + map_date]
+    out = [(incremental + " " +  metric + " - " + state_name) for metric in metrics_list]
+    out = first_label + out
+    return(tuple(out))
+
+@app.callback(
+    Output('map_graph_label', 'className'),
+    [Input('metrics-dropdown', 'value')]
+)
+def update_title_bar_labels(metric):
+    if metric == "% Positive":
+        out = "title_bar_positive"
+    elif metric == "Deaths":
+        out = "title_bar_deaths"
+    elif metric == "Confirmed Cases":
+        out = "title_bar_cases"
+    return(out)
+
+@app.callback(
+     [Output('testing_plot', 'figure'),
+      Output('confirmed_cases_plot', 'figure'),
+      Output('deaths_plot', 'figure')],
+    [Input('incremental-dropdown', 'value'),
+    Input('state_filter', 'children')]
+)
+def update_graph_testing_rate(incremental, state_filter):
+    try:
+        state_filter = json.loads(state_filter)["points"][0]["customdata"][0]
+    except TypeError:
+        state_filter = "Countrywide"
+    mongo_query_out = [doc for doc in by_state_collection.find({"state_name":state_filter}, {'_id':0})]
+    incremental = str.lower(incremental) + "_plots"
+    out = (mongo_query_out[0][incremental]["testing"], mongo_query_out[0][incremental]["confirmed"], mongo_query_out[0][incremental]["deaths"])
+    return out
+
+def find_state_index(full_state_name):
+    return(int(states_conversion_index[full_state_name]))
+
+def add_selected_data(map, index_number="Countrywide"):
+    if index_number=="Countrywide":
+        return(map)
+    else:
+        go_map = go.Figure(map.to_dict())
+        go_map = go_map.update_traces(selectedpoints=[index_number], selected={"marker":{"opacity": 0.5}})
+        return(go_map)
+
+@app.callback(
+    Output('state_map_plot', 'figure'),
+    [Input('incremental-dropdown', 'value'),
+     Input('metrics-dropdown', 'value'),
+     Input('clear-geo', "n_clicks")],
+     [State('state_filter', 'children')])
+def create_map(incremental, metric, n_clicks, state_filter):
+    try:
+        state_filter = int(json.loads(state_filter)['points'][0]['pointIndex'])
+    except TypeError:
+        state_filter = "Countrywide"
+
+    if metric == "% Positive":
+        col_to_plot = "%Positive"
+        colors = "Purpor"
+        format_type = ":.1f%"
+    elif metric == "Confirmed Cases":
+        col_to_plot="Cases"
+        colors="Greens"
+        format_type = ":,.0f"
+    else:
+        col_to_plot = "Deaths"
+        colors = "Blues"
+        format_type = ":,.0f"
+
+
+    mongo_query_out = [doc for doc in maps_collection.find({"Incremental":incremental}, {'_id':0})]
+    df_to_plot = pd.DataFrame(mongo_query_out)
+    df_to_plot['color_field'] = df_to_plot[col_to_plot]/max(df_to_plot[col_to_plot])
+
+    if metric == "% Positive":
+        fig = px.choropleth_mapbox(df_to_plot, geojson=states, locations='id', color='color_field',
+                                   color_continuous_scale=colors,
+                                   range_color=(0, 0.5),
+                                   mapbox_style="carto-positron",
+                                   zoom=2.5, center = {"lat": 37.0902, "lon": -95.7129},
+                                   opacity=0.5,
+                                   hover_data={'State':True,
+                                               'id':False,
+                                               'color_field':False,
+                                                col_to_plot:format_type})
+    else:
+        fig = px.choropleth_mapbox(df_to_plot, geojson=states, locations='id', color='color_field',
+                                   color_continuous_scale=colors,
+                                   #range_color=(0, 40),
+                                   mapbox_style="carto-positron",
+                                   zoom=2.5, center = {"lat": 37.0902, "lon": -95.7129},
+                                   opacity=0.5,
+                                   hover_data={'State':True,
+                                               'id':False,
+                                               'color_field':False,
+                                                col_to_plot:format_type}
+                                  )
+
+
+
+    fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0},
+                      coloraxis_showscale=False)
+    fig.update_layout(clickmode='event+select')
+    if dash.callback_context.triggered[0]['prop_id'].split('.')[0] != 'clear-geo':
+        fig = add_selected_data(fig, state_filter)
+
+    return(fig)
+
+
+# Grabs map query
+@app.callback(
+    Output('state_filter', 'children'),
+    [Input('state_map_plot', 'selectedData'),
+     Input('clear-geo', 'n_clicks')])
+def display_click_data(selectedData, n_clicks):
+    #if clickData == None: return(None)
+    #return(clickData["points"][0]["customdata"][0])
+    if dash.callback_context.triggered[0]['prop_id'].split('.')[0] == 'state_map_plot':
+        return json.dumps(selectedData, indent=2)
+    else:
+        return None
+
+# Sets Geo button to Invisible
+@app.callback(
+    Output('clear-geo', 'className'),
+    [Input('state_map_plot', 'selectedData'),
+    Input('clear-geo', 'n_clicks')])
+def display_click_data(selectedData, n_clicks):
+    if dash.callback_context.triggered[0]['prop_id'].split('.')[0] == 'clear-geo':
+        return('geo_button_hidden')
+    elif selectedData != None:
+        return("geo_button_visible")
+    else:
+        return 'geo_button_hidden'
+
 
 if __name__ == '__main__':
     app.run_server(debug=True)
