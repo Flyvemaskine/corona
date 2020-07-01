@@ -49,9 +49,6 @@ states_conversion_dict = states_conversion.to_dict()["State"]
 states_conversion_index = states_conversion.reset_index().State.to_dict()
 states_conversion_index = dict((v,k) for k,v in states_conversion_index.items())
 
-map_date = [doc for doc in maps_collection.find({"Incremental":"Incremental", "State":"New York"}, {'_id':0, "Date":1})]
-map_date=map_date[0]['Date'].strftime("%Y-%m-%d")
-
 blank_graph={'data':[], 'layout':{'margin':{"l": 0, "b": 0, "t": 0, "r": 0}}}
 
 app.layout = html.Div([
@@ -63,11 +60,13 @@ app.layout = html.Div([
     # Row 2: About
     html.Div([
         html.Div([
-            html.P("Testing Data provided by: ",style={'display':'inline-block'}),
-            dcc.Link('COVID Tracking Project', href='https://covidtracking.com'),
+            html.P("This dashboard is intended to track the spread of the COVID-19 through the US. Testing data is provided by  ",style={'display':'inline-block', 'margin':'5px'}),
+            html.A('The COVID Tracking Project', href='https://covidtracking.com',  target='_blank'),
+            html.P("  while case reports and fatalities are provided by  ",style={'display':'inline-block', 'margin':'5px'}),
+            html.A('JHU', href='https://github.com/CSSEGISandData/COVID-19',  target='_blank'),
             html.Br(),
-            html.P("Case Reports Provided by: ",style={'display':'inline-block'}),
-            dcc.Link('Johns Hopkins Github', href='https://github.com/CSSEGISandData/COVID-19')
+            html.P("Clicking on states in the map below will apply a state level filter. ",style={'display':'inline-block', 'margin':'5px'})
+
         ], className='about_app_blurb_container')
     ], className="row_two_container"),
 
@@ -134,6 +133,8 @@ def update_title_bar_labels(incremental, metric, state_filter):
         state_name = json.loads(state_filter)["points"][0]["customdata"][1]
     except TypeError:
         state_name = "CW"
+    map_date = [doc for doc in maps_collection.find({"Incremental":"Incremental", "State":"New York"}, {'_id':0, "Date":1})]
+    map_date=map_date[0]['Date'].strftime("%Y-%m-%d")
     first_label = [incremental + " " + metric + ": " + map_date]
     out = [(incremental + " " +  metric + " - " + state_name) for metric in metrics_list]
     out = first_label + out

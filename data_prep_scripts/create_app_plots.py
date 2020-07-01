@@ -34,7 +34,7 @@ with open("/Users/CharlesFederici/corona_python/example_master.json", "r") as re
 testing = select_star_mongo(db, 'testing_df')
 testing = testing[testing['date']>= "2020-03-10"]
 # testing = pd.read_csv("/Users/CharlesFederici/corona_python/data/testing.csv")
-states = pd.read_csv("dash_app/states.csv").rename({"State":'state_full'}, axis="columns")
+states = pd.read_csv("/Users/CharlesFederici/corona_python/dash_app/states.csv").rename({"State":'state_full'}, axis="columns")
 
 ## Add full state name, cleanup data grades, add test counts + positive rate
 testing = testing.merge(states, how="left", left_on=['state'], right_on=["Abbreviation"])
