@@ -8,7 +8,7 @@ from pymongo import MongoClient
 import re
 import subprocess
 
-state = pd.read_csv('/Users/CharlesFederici/corona_python/dash_app/states.csv')
+state = pd.read_csv('states.csv')
 
 def add_days_to_text(text_date, delta):
     return((pd.to_datetime(text_date) + dt.timedelta(days=delta)).strftime("%Y-%m-%d"))
@@ -151,7 +151,7 @@ def upload_to_mongo(mongo_database, collection, df_to_upload, drop_prior = False
 
 
 
-env_vars = open("/Users/CharlesFederici/corona_python/dash_app/vars.env", "r")
+env_vars = open("vars.env", "r")
 mongo_write = re.search(r'.*=(.*)\n',env_vars.readlines()[0])[1]
 mongo_client_uri = "mongodb://crfederici:" + mongo_write + "@ds263248.mlab.com:63248/heroku_7ggf57x7?retryWrites=false"
 client = MongoClient(mongo_client_uri)

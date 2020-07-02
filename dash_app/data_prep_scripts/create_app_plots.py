@@ -19,22 +19,21 @@ def select_star_mongo(mongo_database, collection):
     return (pd.DataFrame(mongo_query_out))
 
 
-env_vars = open("/Users/CharlesFederici/corona_python/dash_app/vars.env", "r")
+env_vars = open("vars.env", "r")
 mongo_write = re.search(r'.*=(.*)\n',env_vars.readlines()[0])[1]
 mongo_client_uri = "mongodb://crfederici:" + mongo_write + "@ds263248.mlab.com:63248/heroku_7ggf57x7?retryWrites=false"
 client = MongoClient(mongo_client_uri)
 db=client["heroku_7ggf57x7"]
 
 
-with open("/Users/CharlesFederici/corona_python/example_master.json", "r") as read_file:
+with open("example_master.json", "r") as read_file:
     example_json = json.load(read_file)
 
 
 # Testing Prework #############################################################
 testing = select_star_mongo(db, 'testing_df')
 testing = testing[testing['date']>= "2020-03-10"]
-# testing = pd.read_csv("/Users/CharlesFederici/corona_python/data/testing.csv")
-states = pd.read_csv("/Users/CharlesFederici/corona_python/dash_app/states.csv").rename({"State":'state_full'}, axis="columns")
+states = pd.read_csv("states.csv").rename({"State":'state_full'}, axis="columns")
 
 ## Add full state name, cleanup data grades, add test counts + positive rate
 testing = testing.merge(states, how="left", left_on=['state'], right_on=["Abbreviation"])
