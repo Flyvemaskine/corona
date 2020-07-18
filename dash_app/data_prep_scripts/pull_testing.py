@@ -4,7 +4,7 @@ import pandas as pd
 from pymongo import MongoClient
 import re
 
-env_vars = open("/Users/CharlesFederici/corona_python/dash_app/vars.env", "r")
+env_vars = open("vars.env", "r")
 mongo_write = re.search(r'.*=(.*)\n',env_vars.readlines()[0])[1]
 mongo_client_uri = "mongodb://crfederici:" + mongo_write + "@ds263248.mlab.com:63248/heroku_7ggf57x7?retryWrites=false"
 
@@ -31,7 +31,3 @@ testing_df_collection.insert_many(tracking_df_dict)
 
 client.close()
 print("Upload Complete")
-# tracking_df[['date', 'state', 'positive',
-#              'negative', 'positiveIncrease',
-#              'negativeIncrease','dataQualityGrade']] \
-#     .to_csv("/Users/CharlesFederici/corona_python/data/testing.csv")
