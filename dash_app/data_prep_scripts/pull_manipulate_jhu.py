@@ -19,7 +19,7 @@ def select_star_mongo(mongo_database, collection):
 
 def find_missing(current_mongo_df):
     def get_latest_date(date_diff = 1):
-        return((dt.date.today() - dt.timedelta(days=date_diff)).strftime("%Y-%m-%d"))
+        return((dt.datetime.now() - dt.timedelta(hours=6, days=date_diff)).strftime("%Y-%m-%d"))
     def find_dates_in_mongo(current_mongo_df):
         if current_mongo_df.empty:
             out = []
@@ -44,7 +44,7 @@ def find_missing(current_mongo_df):
 
     def find_missing_dates(is_this, in_this):
         return(list(set(in_this)-set(is_this)))
-    latest_date_avail = get_latest_date()
+    latest_date_avail = get_latest_date(1)
     mongo_dates = find_dates_in_mongo(current_mongo_df)
 
     overall_date_range = create_date_range("2020-01-23", latest_date_avail)
