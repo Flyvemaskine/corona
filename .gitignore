@@ -15,3 +15,5 @@ vars.env
 interactive_jhu.ipynb
 Untitled.ipynb
 !dash_app/example_master.json
+test_aws.ipynb
+vars.py
