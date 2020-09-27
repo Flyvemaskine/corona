@@ -2,6 +2,7 @@
 
 import boto3
 import copy
+from decimal import Decimal
 from dotenv import load_dotenv
 import json
 import numpy as np
@@ -11,7 +12,6 @@ from pymongo import MongoClient
 import re
 import subprocess
 from urllib.request import urlopen
-import plotly.express as px
 
 
 # AWS Admin #################################################################
@@ -32,11 +32,19 @@ s3 = boto3.client('s3',
                   aws_access_key_id=AWS_KEY,
                   aws_secret_access_key=AWS_SECRET)
 
+dynamodb = boto3.client('dynamodb',
+                        aws_access_key_id=AWS_KEY_DYNAMO,
+                        aws_secret_access_key=AWS_SECRET_DYNAMO)
+dynamodb_r = boto3.resource('dynamodb',
+                            aws_access_key_id=AWS_KEY_DYNAMO,
+                            aws_secret_access_key=AWS_SECRET_DYNAMO)
+
 # Testing Prework #############################################################
 obj = s3.get_object(Bucket="us-corona-tracking-data", Key="testing.csv")
 testing = pd.read_csv(obj['Body'])
 testing = testing[testing['date']>= "2020-03-10"]
-states = pd.read_csv("states.csv").rename({"State":'state_full'}, axis="columns")
+states  = pd.read_csv(os.path.join(os.getcwd(),'dash_app/states.csv')) \
+            .rename({"State":'state_full'}, axis="columns")
 
 ## Add full state name, cleanup data grades, add test counts + positive rate
 testing = testing.merge(states, how="left", left_on=['state'], right_on=["Abbreviation"])
@@ -61,6 +69,7 @@ testing['incremental_positive_rate'] = testing['positiveIncrease'] / (testing['p
 data_quality_color_mapping = {'F':"#FFFAFD", 'NA':"#FFFAFD",'D': '#E7BFD3', 'C':'#CF85AA', 'B':'#B74B81', 'A':'#9F1158'}
 testing['data_quality_grade_colors'] = testing['dataQualityGrade'].replace(data_quality_color_mapping)
 testing['dataQualityGrade'] = testing[['dataQualityGrade', 'state']].apply(lambda x: "NA" if x.state == "CW" else x.dataQualityGrade, axis=1)
+
 
 ## Create hovers text
 
@@ -104,12 +113,14 @@ def create_testing_rate_plot(df, example_json, state, incremental):
         tests_flag = tests_metric + "_flag"
 
     df = df[df['state_full'] == state]
+    df = df.replace([np.inf, -np.inf], np.nan)
+    df = df.dropna()
     out_json = copy.deepcopy(example_json["incremental_plots"]["testing_rate"])
 
     out_json['data'][0]["x"] = df["date"].tolist()
-    out_json['data'][0]["y"] = df[tests_metric].tolist()
+    out_json['data'][0]["y"] = df[tests_metric].apply(str).apply(Decimal).tolist()
     out_json['data'][0]["type"] = "bar"
-    out_json['data'][0]["opacity"] = 0.5
+    out_json['data'][0]["opacity"] = Decimal("0.5")
     out_json['data'][0]["name"] = "Tests"
     out_json['data'][0]["yaxis"] = "y2"
     out_json['data'][0]["showlegend"] = False
@@ -121,7 +132,7 @@ def create_testing_rate_plot(df, example_json, state, incremental):
 
     out_json['data'].append({})
     out_json['data'][1]['x'] = df["date"].tolist()
-    out_json['data'][1]['y'] = df[rate_metric].tolist()
+    out_json['data'][1]['y'] = df[rate_metric].apply(str).apply(Decimal).tolist()
 
     out_json['data'][1]["type"] = "scatter"
     out_json['data'][1]["mode"] = "markers+lines"
@@ -142,13 +153,13 @@ def create_testing_rate_plot(df, example_json, state, incremental):
     out_json['layout']['yaxis2']['side'] = "right"
     out_json['layout']['yaxis2']['rangemode'] = "nonnegative"
 
-
-
     return(out_json)
+
 
 ## Confirmed Cases/ Deaths prework ###########################################
 
-by_state = select_star_mongo(db, "by_state_table")
+obj = s3.get_object(Bucket="us-corona-tracking-data", Key="by_state_table.csv")
+by_state = pd.read_csv(obj['Body'])
 by_state = by_state[by_state['report_date'] >= "2020-03-10"]
 by_state = by_state.drop(['country_region',
                           'recovered_pd', 'confirmed_pd', 'deaths_pd'], axis = 1) \
@@ -172,16 +183,21 @@ def create_plot_cases(df, example_json, state, confirmed_or_deaths, incremental)
     if incremental == "incremental":
         confirmed_or_deaths = incremental + "_" + confirmed_or_deaths
 
+    df[confirmed_or_deaths] = df[confirmed_or_deaths].apply(str).apply(Decimal)
+    df = df.replace([np.inf, -np.inf], np.nan)
+    df = df.dropna()
+
     out_json["data"][0]["x"] = df['report_date'].tolist()
     out_json["data"][0]["y"] = df[confirmed_or_deaths].tolist()
     out_json['data'][0]["marker"] = {}
     out_json['data'][0]["marker"]['color'] = fill_color
     return(out_json)
 
+
 ## Create Plots
 state_list=by_state['province_state'].unique().tolist()
 
-plots_for_mongo = []
+plots_for_dynamo = []
 for state in state_list:
     out = {}
     confirmed_plot = create_plot_cases(by_state, example_json, state, "confirmed", "incremental")
@@ -198,16 +214,31 @@ for state in state_list:
                                 "deaths": deaths_plot,
                                 "testing": testing_plot}
     out['state_name'] = state
-    plots_for_mongo.append(out)
+    plots_for_dynamo.append(out)
 
-plots_collection = db['plots']
-plots_collection.drop()
-plots_collection.insert_many(plots_for_mongo)
+##  AWS Stuff to create_plots
+#Using the resource here because it's less picky about datatypes.
+    #client forces you to specify datatypes for each element
+#Delete old entries
+for state in state_list:
+    print("Removing old version of: ", state)
+    dynamodb_r.Table('bar_plots').delete_item(Key={"state_name":state})
+
+# Add New Entries
+for plot in plots_for_dynamo:
+    state_name = plot['state_name']
+    print("Adding plot to bar_plots table:", state_name)
+    dynamodb_r.Table('bar_plots').put_item(Item=plot)
+
 
 
 ### Create maps ###############################################################
 testing['date']=pd.to_datetime(testing['date'])
-state_table = by_state.merge(testing, how="left", left_on=["province_state", 'report_date'], right_on=['state_full', 'date'])
+by_state['report_date']=pd.to_datetime(by_state['report_date'])
+state_table = by_state.merge(testing,
+                             how="left",
+                             left_on=["province_state", 'report_date'],
+                             right_on=['state_full', 'date'])
 date_filter = min([max(by_state['report_date']), max(testing['date'])])
 
 cumulative_table = state_table[state_table['date'] == date_filter][['province_state', 'report_date','confirmed', 'deaths', 'positive_rate', 'dataQualityGrade', "Abbreviation"]]
@@ -221,9 +252,10 @@ incremental_table['incremental_positive_rate'] = np.round_(incremental_table['in
 incremental_table = incremental_table.rename({'province_state':'State', 'report_date':"Date", 'incremental_confirmed':'Cases', 'incremental_deaths':'Deaths', 'incremental_positive_rate':'%Positive', 'dataQualityGrade':'Testing-Data-Quality', "Abbreviation":"id"},axis='columns')
 incremental_table['Incremental'] = "Incremental"
 
-df_for_mongo = cumulative_table.append(incremental_table)
-df_for_mongo = df_for_mongo[df_for_mongo["id"]!="CW"].to_dict("records")
+df_for_s3 = cumulative_table.append(incremental_table)
+df_for_s3 = df_for_s3[df_for_s3["id"]!="CW"]
 
-maps_collection = db['maps']
-maps_collection.drop()
-maps_collection.insert_many(df_for_mongo)
+s3.put_object(Bucket="us-corona-tracking-data",
+              Key="df_for_maps.csv",
+              Body=df_for_s3.to_csv(index=False))
+print("uploading maps to s3")

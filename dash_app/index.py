@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 
+import boto3
+from boto3.dynamodb.conditions import Key
 from bson import json_util
 from datetime import date, datetime
 import dash
 from dash.dependencies import Input, Output, State
 import dash_core_components as dcc
 import dash_html_components as html
+from dotenv import load_dotenv
 import json
+import os
 import pandas as pd
 from pymongo import MongoClient
 import re
 from app import app, server
-#from apps import by_state, countrywide
 from urllib.request import urlopen
 import plotly.express as px
 import plotly.graph_objects as go
@@ -28,21 +31,39 @@ def json_serial(obj):
         return obj.isoformat()
     raise TypeError ("Type %s not serializable" % type(obj))
 
-env_vars = open("vars.env", "r")
-mongo_read = re.search(r'.*=(.*)\n',env_vars.readlines()[1])[1]
-mongo_client_uri = "mongodb://corona_dash_app_ro:" + mongo_read + "@ds263248.mlab.com:63248/heroku_7ggf57x7?retryWrites=false"
+## AWS stuff
+load_dotenv(os.path.join(os.getcwd(),"dash_app/vars.env"))
+AWS_KEY=os.getenv('AWS_KEY')
+AWS_SECRET=os.getenv('AWS_SECRET')
 
-client = MongoClient(mongo_client_uri)
-db=client["heroku_7ggf57x7"]
+AWS_KEY_DYNAMO=os.getenv('AWS_KEY_DYNAMO')
+AWS_SECRET_DYNAMO=os.getenv('AWS_SECRET_DYNAMO')
+
+s3 = boto3.client('s3',
+                  aws_access_key_id=AWS_KEY,
+                  aws_secret_access_key=AWS_SECRET)
+
+
+dynamodb = boto3.client('dynamodb',
+                        aws_access_key_id=AWS_KEY_DYNAMO,
+                        aws_secret_access_key=AWS_SECRET_DYNAMO)
+dynamodb_r = boto3.resource('dynamodb',
+                            aws_access_key_id=AWS_KEY_DYNAMO,
+                            aws_secret_access_key=AWS_SECRET_DYNAMO)
+
+
+
 
 with urlopen("https://raw.githubusercontent.com/python-visualization/folium/master/examples/data/us-states.json"
 ) as response:
     states = json.load(response)
 
-by_state_collection = db['plots']
-maps_collection = db['maps']
+maps_df = s3.get_object(Bucket="us-corona-tracking-data", Key="df_for_maps.csv")
+maps_df = pd.read_csv(maps_df['Body'])
 
-states_conversion = pd.read_csv("states.csv").set_index(["Abbreviation"])
+
+states_conversion = s3.get_object(Bucket="us-corona-tracking-data", Key="states.csv")
+states_conversion = pd.read_csv(states_conversion['Body']).set_index(["Abbreviation"])
 states_conversion_dict = states_conversion.to_dict()["State"]
 
 
@@ -133,8 +154,7 @@ def update_title_bar_labels(incremental, metric, state_filter):
         state_name = json.loads(state_filter)["points"][0]["customdata"][1]
     except TypeError:
         state_name = "CW"
-    map_date = [doc for doc in maps_collection.find({"Incremental":"Incremental", "State":"New York"}, {'_id':0, "Date":1})]
-    map_date=map_date[0]['Date'].strftime("%Y-%m-%d")
+    map_date = maps_df['Date'].max()
     first_label = [incremental + " " + metric + ": " + map_date]
     out = [(incremental + " " +  metric + " - " + state_name) for metric in metrics_list]
     out = first_label + out
@@ -165,9 +185,15 @@ def update_graph_testing_rate(incremental, state_filter):
         state_filter = json.loads(state_filter)["points"][0]["customdata"][0]
     except TypeError:
         state_filter = "Countrywide"
-    mongo_query_out = [doc for doc in by_state_collection.find({"state_name":state_filter}, {'_id':0})]
+
+    table = dynamodb_r.Table('bar_plots')
+    bar_plots= table.query(
+            KeyConditionExpression=Key('state_name').eq(state_filter)
+    )['Items'][0]
     incremental = str.lower(incremental) + "_plots"
-    out = (mongo_query_out[0][incremental]["testing"], mongo_query_out[0][incremental]["confirmed"], mongo_query_out[0][incremental]["deaths"])
+    out = (bar_plots[incremental]["testing"],
+           bar_plots[incremental]["confirmed"],
+           bar_plots[incremental]["deaths"])
     return out
 
 def find_state_index(full_state_name):
@@ -207,8 +233,7 @@ def create_map(incremental, metric, n_clicks, state_filter):
         format_type = ":,.0f"
 
 
-    mongo_query_out = [doc for doc in maps_collection.find({"Incremental":incremental}, {'_id':0})]
-    df_to_plot = pd.DataFrame(mongo_query_out)
+    df_to_plot = maps_df[maps_df["Incremental"]==incremental]
     df_to_plot['color_field'] = df_to_plot[col_to_plot]/max(df_to_plot[col_to_plot])
 
     if metric == "% Positive":
