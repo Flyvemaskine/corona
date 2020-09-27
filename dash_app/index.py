@@ -32,7 +32,7 @@ def json_serial(obj):
     raise TypeError ("Type %s not serializable" % type(obj))
 
 ## AWS stuff
-load_dotenv(os.path.join(os.getcwd(),"dash_app/vars.env"))
+load_dotenv(os.path.join(os.getcwd(),"vars.env"))
 AWS_KEY=os.getenv('AWS_KEY')
 AWS_SECRET=os.getenv('AWS_SECRET')
 
@@ -41,15 +41,18 @@ AWS_SECRET_DYNAMO=os.getenv('AWS_SECRET_DYNAMO')
 
 s3 = boto3.client('s3',
                   aws_access_key_id=AWS_KEY,
-                  aws_secret_access_key=AWS_SECRET)
+                  aws_secret_access_key=AWS_SECRET,
+                  region_name='us-east-2')
 
 
 dynamodb = boto3.client('dynamodb',
                         aws_access_key_id=AWS_KEY_DYNAMO,
-                        aws_secret_access_key=AWS_SECRET_DYNAMO)
+                        aws_secret_access_key=AWS_SECRET_DYNAMO,
+                        region_name='us-east-2')
 dynamodb_r = boto3.resource('dynamodb',
                             aws_access_key_id=AWS_KEY_DYNAMO,
-                            aws_secret_access_key=AWS_SECRET_DYNAMO)
+                            aws_secret_access_key=AWS_SECRET_DYNAMO,
+                            region_name='us-east-2')
 
 
 

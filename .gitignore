@@ -3,6 +3,8 @@ dash_app/*
 !dash_app/app.py
 !dash_app/states.csv
 !dash_app/index.py
+!dash_app/Dockerfile
+!dash_app/Dockerrun.aws.json
 !dash_app/apps/
 !dash_app/Procfile
 !dash_app/requirements.txt
