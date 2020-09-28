@@ -16,7 +16,7 @@ from urllib.request import urlopen
 
 # AWS Admin #################################################################
 
-load_dotenv(os.path.join(os.getcwd(),"dash_app/vars.env"))
+load_dotenv(os.path.join(os.getcwd(),"vars.env"))
 
 AWS_KEY=os.getenv('AWS_KEY')
 AWS_SECRET=os.getenv('AWS_SECRET')
@@ -24,26 +24,30 @@ AWS_SECRET=os.getenv('AWS_SECRET')
 AWS_KEY_DYNAMO=os.getenv('AWS_KEY_DYNAMO')
 AWS_SECRET_DYNAMO=os.getenv('AWS_SECRET_DYNAMO')
 
-json_path = os.path.join(os.getcwd(),"dash_app/example_master.json")
+json_path = os.path.join(os.getcwd(),"example_master.json")
 with open(json_path, "r") as read_file:
     example_json = json.load(read_file)
 
 s3 = boto3.client('s3',
                   aws_access_key_id=AWS_KEY,
-                  aws_secret_access_key=AWS_SECRET)
+                  aws_secret_access_key=AWS_SECRET,
+                  region_name='us-east-2')
 
 dynamodb = boto3.client('dynamodb',
                         aws_access_key_id=AWS_KEY_DYNAMO,
-                        aws_secret_access_key=AWS_SECRET_DYNAMO)
+                        aws_secret_access_key=AWS_SECRET_DYNAMO,
+                        region_name='us-east-2')
 dynamodb_r = boto3.resource('dynamodb',
                             aws_access_key_id=AWS_KEY_DYNAMO,
-                            aws_secret_access_key=AWS_SECRET_DYNAMO)
+                            aws_secret_access_key=AWS_SECRET_DYNAMO,
+                            region_name='us-east-2')
 
 # Testing Prework #############################################################
 obj = s3.get_object(Bucket="us-corona-tracking-data", Key="testing.csv")
 testing = pd.read_csv(obj['Body'])
 testing = testing[testing['date']>= "2020-03-10"]
-states  = pd.read_csv(os.path.join(os.getcwd(),'dash_app/states.csv')) \
+states = s3.get_object(Bucket="us-corona-tracking-data", Key="states.csv")
+states = pd.read_csv(states['Body']) \
             .rename({"State":'state_full'}, axis="columns")
 
 ## Add full state name, cleanup data grades, add test counts + positive rate

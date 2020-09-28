@@ -7,7 +7,7 @@ import os
 import pandas as pd
 import re
 
-load_dotenv(os.path.join(os.getcwd(),"dash_app/vars.env"))
+load_dotenv(os.path.join(os.getcwd(),"vars.env"))
 
 AWS_KEY = os.getenv('AWS_KEY')
 AWS_SECRET=os.getenv('AWS_SECRET')
@@ -26,7 +26,8 @@ testing_df = testing_df[['date', 'state', 'positive',
 
 s3 = boto3.client('s3',
                   aws_access_key_id=AWS_KEY,
-                  aws_secret_access_key=AWS_SECRET)
+                  aws_secret_access_key=AWS_SECRET,
+                  region_name='us-east-2')
 
 s3.put_object(Bucket="us-corona-tracking-data",
               Key="testing.csv",

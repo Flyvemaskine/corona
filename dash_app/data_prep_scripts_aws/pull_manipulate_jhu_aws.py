@@ -11,17 +11,18 @@ import re
 import subprocess
 
 
-load_dotenv(os.path.join(os.getcwd(),"dash_app/vars.env"))
+load_dotenv(os.path.join(os.getcwd(),"vars.env"))
 
 AWS_KEY = os.getenv('AWS_KEY')
 AWS_SECRET=os.getenv('AWS_SECRET')
 
 s3 = boto3.client('s3',
                   aws_access_key_id=AWS_KEY,
-                  aws_secret_access_key=AWS_SECRET)
+                  aws_secret_access_key=AWS_SECRET,
+                  region_name='us-east-2')
 
-state = pd.read_csv(os.path.join(os.getcwd(),'dash_app/states.csv'))
-
+state = s3.get_object(Bucket="us-corona-tracking-data", Key="states.csv")
+state = pd.read_csv(state['Body'])
 
 def add_days_to_text(text_date, delta):
     return((pd.to_datetime(text_date) + dt.timedelta(days=delta)).strftime("%Y-%m-%d"))
@@ -29,9 +30,9 @@ def add_days_to_text(text_date, delta):
 def get_current_df():
     try:
         obj = s3.get_object(Bucket="us-corona-tracking-data", Key="jhu.csv")
-        out = obj['Body']
+        out = pd.read_csv(obj['Body'])
     except:
-        out = pd.DataFrame
+        out = pd.DataFrame()
     return(out)
 
 
@@ -42,7 +43,7 @@ def find_missing(current_df):
         if current_df.empty:
             out = []
         else:
-            out = current_df['report_date'].dt.strftime("%Y-%m-%d").unique().tolist()
+            out = current_df['report_date'].unique().tolist()
         return (out)
 
     def create_date_range(start_date, end_date, date_format = "%Y-%m-%d"):
