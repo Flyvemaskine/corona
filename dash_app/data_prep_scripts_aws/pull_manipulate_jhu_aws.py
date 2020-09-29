@@ -43,7 +43,9 @@ def find_missing(current_df):
         if current_df.empty:
             out = []
         else:
-            out = current_df['report_date'].unique().tolist()
+            out = pd.to_datetime(current_df['report_date']).dt.strftime("%Y-%m-%d")\
+                    .unique() \
+                    .tolist()
         return (out)
 
     def create_date_range(start_date, end_date, date_format = "%Y-%m-%d"):
