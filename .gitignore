@@ -11,6 +11,7 @@ dash_app/*
 !dash_app/assets
 !dash_app/data_prep_scripts
 !dash_app/data_prep_scripts_aws
+!dash_app/data_prep_scripts_aws/scheduler_cli.egg-info
 dash_app/data_prep_scripts_aws/vars.env
 dash_app/apps/__pycache__
 mongo.ipynb

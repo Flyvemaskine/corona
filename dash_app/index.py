@@ -20,7 +20,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 # Dropdowns
-incrementals = ["Cumulative", "Incremental"]
+incrementals = ["Incremental", "Cumulative"]
 metrics_list = ["% Positive", "Confirmed Cases", "Deaths"]
 
 # Mongo stuff general
@@ -35,6 +35,8 @@ def json_serial(obj):
 load_dotenv(os.path.join(os.getcwd(),"vars.env"))
 AWS_KEY=os.getenv('AWS_KEY')
 AWS_SECRET=os.getenv('AWS_SECRET')
+
+
 
 AWS_KEY_DYNAMO=os.getenv('AWS_KEY_DYNAMO')
 AWS_SECRET_DYNAMO=os.getenv('AWS_SECRET_DYNAMO')
@@ -60,9 +62,6 @@ dynamodb_r = boto3.resource('dynamodb',
 with urlopen("https://raw.githubusercontent.com/python-visualization/folium/master/examples/data/us-states.json"
 ) as response:
     states = json.load(response)
-
-maps_df = s3.get_object(Bucket="us-corona-tracking-data", Key="df_for_maps.csv")
-maps_df = pd.read_csv(maps_df['Body'])
 
 
 states_conversion = s3.get_object(Bucket="us-corona-tracking-data", Key="states.csv")
@@ -95,6 +94,7 @@ app.layout = html.Div([
     ], className="row_two_container"),
 
     html.Div(id="state_filter", style={'display':'none'}),
+    html.Div(id="map_data", style={"display":"none"}),
     # Selectors
 
     html.Div([
@@ -146,21 +146,28 @@ app.layout = html.Div([
     [Output('map_graph_label', 'children'),
      Output('positive_graph_label', 'children'),
      Output('cases_graph_label', 'children'),
-     Output('deaths_graph_label','children')
+     Output('deaths_graph_label','children'),
+     Output('map_data', 'children')
     ],
     [Input('incremental-dropdown', 'value'),
     Input('metrics-dropdown', 'value'),
     Input('state_filter', 'children')]
 )
 def update_title_bar_labels(incremental, metric, state_filter):
+
+    maps_df = s3.get_object(Bucket="us-corona-tracking-data", Key="df_for_maps.csv")
+    maps_df = pd.read_csv(maps_df['Body'])
+    map_date = maps_df['Date'].max()
+    maps_df = json.dumps(maps_df.to_json()) # or, more generally, json.dumps(cleaned_df)
+
     try:
         state_name = json.loads(state_filter)["points"][0]["customdata"][1]
-    except TypeError:
+    except:
         state_name = "CW"
-    map_date = maps_df['Date'].max()
+
     first_label = [incremental + " " + metric + ": " + map_date]
     out = [(incremental + " " +  metric + " - " + state_name) for metric in metrics_list]
-    out = first_label + out
+    out = first_label + out + [maps_df]
     return(tuple(out))
 
 @app.callback(
@@ -214,9 +221,10 @@ def add_selected_data(map, index_number="Countrywide"):
     Output('state_map_plot', 'figure'),
     [Input('incremental-dropdown', 'value'),
      Input('metrics-dropdown', 'value'),
-     Input('clear-geo', "n_clicks")],
+     Input('clear-geo', "n_clicks"),
+     Input('map_data', 'children')],
      [State('state_filter', 'children')])
-def create_map(incremental, metric, n_clicks, state_filter):
+def create_map(incremental, metric, n_clicks, map_data, state_filter):
     try:
         state_filter = int(json.loads(state_filter)['points'][0]['pointIndex'])
     except TypeError:
@@ -235,8 +243,9 @@ def create_map(incremental, metric, n_clicks, state_filter):
         colors = "Blues"
         format_type = ":,.0f"
 
+    map_data = pd.read_json(json.loads(map_data))
 
-    df_to_plot = maps_df[maps_df["Incremental"]==incremental]
+    df_to_plot = map_data[map_data["Incremental"]==incremental]
     df_to_plot['color_field'] = df_to_plot[col_to_plot]/max(df_to_plot[col_to_plot])
 
     if metric == "% Positive":
@@ -302,4 +311,4 @@ def display_click_data(selectedData, n_clicks):
 
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    app.run_server(debug=False)

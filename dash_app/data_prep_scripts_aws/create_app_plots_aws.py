@@ -225,13 +225,13 @@ for state in state_list:
     #client forces you to specify datatypes for each element
 #Delete old entries
 for state in state_list:
-    print("Removing old version of: ", state)
+    print("Removing old version of: " + state)
     dynamodb_r.Table('bar_plots').delete_item(Key={"state_name":state})
 
 # Add New Entries
 for plot in plots_for_dynamo:
     state_name = plot['state_name']
-    print("Adding plot to bar_plots table:", state_name)
+    print("Adding plot to bar_plots table:" + state_name)
     dynamodb_r.Table('bar_plots').put_item(Item=plot)
 
 
