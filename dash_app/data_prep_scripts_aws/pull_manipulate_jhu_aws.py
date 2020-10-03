@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+from dotenv import load_dotenv
+import boto3
 import datetime as dt
 import numpy as np
 import os
@@ -8,23 +10,42 @@ from pymongo import MongoClient
 import re
 import subprocess
 
-state = pd.read_csv('states.csv')
+
+load_dotenv(os.path.join(os.getcwd(),"vars.env"))
+
+AWS_KEY = os.getenv('AWS_KEY')
+AWS_SECRET=os.getenv('AWS_SECRET')
+
+s3 = boto3.client('s3',
+                  aws_access_key_id=AWS_KEY,
+                  aws_secret_access_key=AWS_SECRET,
+                  region_name='us-east-2')
+
+state = s3.get_object(Bucket="us-corona-tracking-data", Key="states.csv")
+state = pd.read_csv(state['Body'])
 
 def add_days_to_text(text_date, delta):
     return((pd.to_datetime(text_date) + dt.timedelta(days=delta)).strftime("%Y-%m-%d"))
 
-def select_star_mongo(mongo_database, collection):
-    mongo_query_out = [doc for doc in mongo_database[collection].find({}, {'_id':0})]
-    return (pd.DataFrame(mongo_query_out))
+def get_current_df():
+    try:
+        obj = s3.get_object(Bucket="us-corona-tracking-data", Key="jhu.csv")
+        out = pd.read_csv(obj['Body'])
+    except:
+        out = pd.DataFrame()
+    return(out)
 
-def find_missing(current_mongo_df):
+
+def find_missing(current_df):
     def get_latest_date(date_diff = 1):
         return((dt.datetime.now() - dt.timedelta(hours=6, days=date_diff)).strftime("%Y-%m-%d"))
-    def find_dates_in_mongo(current_mongo_df):
-        if current_mongo_df.empty:
+    def find_dates_in_df(current_df):
+        if current_df.empty:
             out = []
         else:
-            out = current_mongo_df['report_date'].dt.strftime("%Y-%m-%d").unique().tolist()
+            out = pd.to_datetime(current_df['report_date']).dt.strftime("%Y-%m-%d")\
+                    .unique() \
+                    .tolist()
         return (out)
 
     def create_date_range(start_date, end_date, date_format = "%Y-%m-%d"):
@@ -45,14 +66,15 @@ def find_missing(current_mongo_df):
     def find_missing_dates(is_this, in_this):
         return(list(set(in_this)-set(is_this)))
     latest_date_avail = get_latest_date(1)
-    mongo_dates = find_dates_in_mongo(current_mongo_df)
+    existing_dates = find_dates_in_df(current_df)
 
     overall_date_range = create_date_range("2020-01-23", latest_date_avail)
 
-    missing_dates = find_missing_dates(mongo_dates, overall_date_range)
+    missing_dates = find_missing_dates(existing_dates, overall_date_range)
     return(missing_dates)
 
-def pull_missing(missing_dates):
+
+def pull_missing(current_df, missing_dates):
     if not missing_dates:
         print("Missing date field is empty")
         return None
@@ -122,6 +144,10 @@ def pull_missing(missing_dates):
         return(pd.concat(out, axis = 0))
 
     out = pull_days(missing_dates)
+    if current_df.empty:
+        out = out
+    else:
+        out = current_df.append(out)
     return(out)
 
 def create_by_state(df):
@@ -141,32 +167,26 @@ def create_by_country(df):
     df['incremental_active'] = df['incremental_confirmed'] - df['incremental_deaths'] - df['incremental_recovered']
     return(df)
 
-def upload_to_mongo(mongo_database, collection, df_to_upload, drop_prior = False):
+def upload_to_aws(bucket, path, df_to_upload):
     if df_to_upload is None:
         print("Dataframe is empty")
         return None
-    df_to_upload_dict = df_to_upload.to_dict(orient="records")
-    if drop_prior: mongo_database[collection].drop()
-    return(mongo_database[collection].insert_many(df_to_upload_dict))
+    s3.put_object(Bucket=bucket,
+              Key=(path+".csv"),
+              Body=df_to_upload.to_csv(index=False))
+    pass
 
 
 
-env_vars = open("vars.env", "r")
-mongo_write = re.search(r'.*=(.*)\n',env_vars.readlines()[0])[1]
-mongo_client_uri = "mongodb://crfederici:" + mongo_write + "@ds263248.mlab.com:63248/heroku_7ggf57x7?retryWrites=false"
-client = MongoClient(mongo_client_uri)
-db=client["heroku_7ggf57x7"]
 
 
-current_mongo= select_star_mongo(db, "jhu")
-missing_dates = find_missing(current_mongo)
-df_to_upload = pull_missing(missing_dates)
-upload_to_mongo(db, 'jhu', df_to_upload)
+current_df= get_current_df()
+missing_dates = find_missing(current_df)
+df_to_upload = pull_missing(current_df, missing_dates)
+upload_to_aws("us-corona-tracking-data", 'jhu', df_to_upload)
 
-current_mongo = select_star_mongo(db, 'jhu')
+by_state = create_by_state(df_to_upload)
+by_country = create_by_country(df_to_upload)
 
-by_state = create_by_state(current_mongo)
-by_country = create_by_country(current_mongo)
-
-upload_to_mongo(db, 'by_state_table', by_state, drop_prior = True)
-upload_to_mongo(db, 'by_country_table', by_country, drop_prior=True)
+upload_to_aws("us-corona-tracking-data", 'by_state_table', by_state)
+upload_to_aws("us-corona-tracking-data", 'by_country_table', by_country)

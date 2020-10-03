@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 
+from dotenv import load_dotenv
+
+import boto3
+import os
 import pandas as pd
-from pymongo import MongoClient
 import re
 
-env_vars = open("vars.env", "r")
-mongo_write = re.search(r'.*=(.*)\n',env_vars.readlines()[0])[1]
-mongo_client_uri = "mongodb://crfederici:" + mongo_write + "@ds263248.mlab.com:63248/heroku_7ggf57x7?retryWrites=false"
+load_dotenv(os.path.join(os.getcwd(),"vars.env"))
+
+AWS_KEY = os.getenv('AWS_KEY')
+AWS_SECRET=os.getenv('AWS_SECRET')
 
 def fix_date(date):
     date = str(date)
@@ -20,14 +24,14 @@ testing_df = testing_df[['date', 'state', 'positive',
                            'negative', 'positiveIncrease',
                            'negativeIncrease','dataQualityGrade']]
 
-tracking_df_dict = testing_df.to_dict(orient="records")
+s3 = boto3.client('s3',
+                  aws_access_key_id=AWS_KEY,
+                  aws_secret_access_key=AWS_SECRET,
+                  region_name='us-east-2')
 
-print("Uploading to Mongo")
-client = MongoClient(mongo_client_uri)
-db=client["heroku_7ggf57x7"]
-testing_df_collection = db['testing_df']
-testing_df_collection.drop()
-testing_df_collection.insert_many(tracking_df_dict)
+s3.put_object(Bucket="us-corona-tracking-data",
+              Key="testing.csv",
+              Body=testing_df.to_csv(index=False))
 
-client.close()
+
 print("Upload Complete")

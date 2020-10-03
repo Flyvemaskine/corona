@@ -3,11 +3,16 @@ dash_app/*
 !dash_app/app.py
 !dash_app/states.csv
 !dash_app/index.py
+!dash_app/Dockerfile
+!dash_app/Dockerrun.aws.json
 !dash_app/apps/
 !dash_app/Procfile
 !dash_app/requirements.txt
 !dash_app/assets
 !dash_app/data_prep_scripts
+!dash_app/data_prep_scripts_aws
+dash_app/data_prep_scripts_aws/scheduler_cli.egg-info
+dash_app/data_prep_scripts_aws/vars.env
 dash_app/apps/__pycache__
 mongo.ipynb
 .ipynb_checkpoints/*
@@ -15,3 +20,5 @@ vars.env
 interactive_jhu.ipynb
 Untitled.ipynb
 !dash_app/example_master.json
+test_aws.ipynb
+vars.py
