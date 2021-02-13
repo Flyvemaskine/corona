@@ -5,6 +5,7 @@ import copy
 from decimal import Decimal
 from dotenv import load_dotenv
 import json
+from datetime import date, datetime
 import numpy as np
 import os
 import pandas as pd
@@ -12,7 +13,7 @@ from pymongo import MongoClient
 import re
 import subprocess
 from urllib.request import urlopen
-
+import pickle
 
 # AWS Admin #################################################################
 
@@ -21,8 +22,6 @@ load_dotenv(os.path.join(os.getcwd(),"vars.env"))
 AWS_KEY=os.getenv('AWS_KEY')
 AWS_SECRET=os.getenv('AWS_SECRET')
 
-AWS_KEY_DYNAMO=os.getenv('AWS_KEY_DYNAMO')
-AWS_SECRET_DYNAMO=os.getenv('AWS_SECRET_DYNAMO')
 
 json_path = os.path.join(os.getcwd(),"example_master.json")
 with open(json_path, "r") as read_file:
@@ -33,14 +32,13 @@ s3 = boto3.client('s3',
                   aws_secret_access_key=AWS_SECRET,
                   region_name='us-east-2')
 
-dynamodb = boto3.client('dynamodb',
-                        aws_access_key_id=AWS_KEY_DYNAMO,
-                        aws_secret_access_key=AWS_SECRET_DYNAMO,
-                        region_name='us-east-2')
-dynamodb_r = boto3.resource('dynamodb',
-                            aws_access_key_id=AWS_KEY_DYNAMO,
-                            aws_secret_access_key=AWS_SECRET_DYNAMO,
-                            region_name='us-east-2')
+def json_serial(obj):
+    """JSON serializer for objects not serializable by default json code"""
+
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    raise TypeError ("Type %s not serializable" % type(obj))
+
 
 # Testing Prework #############################################################
 obj = s3.get_object(Bucket="us-corona-tracking-data", Key="testing.csv")
@@ -64,10 +62,10 @@ testing_cw['dataQualityGrade'] = "A"
 
 testing = pd.concat([testing, testing_cw], axis=0)
 
-testing['tests'] = testing['positive'] + testing['negative']
+testing['tests'] = testing['totalTestResults']
 testing['positive_rate'] = testing['positive'] / testing['tests']
-testing['incremental_tests'] = testing['positiveIncrease'] + testing['negativeIncrease']
-testing['incremental_positive_rate'] = testing['positiveIncrease'] / (testing['positiveIncrease'] + testing['negativeIncrease'])
+testing['incremental_tests'] = testing['totalTestResultsIncrease']
+testing['incremental_positive_rate'] = testing['positiveIncrease'] / (testing['incremental_tests'])
 
 
 data_quality_color_mapping = {'F':"#FFFAFD", 'NA':"#FFFAFD",'D': '#E7BFD3', 'C':'#CF85AA', 'B':'#B74B81', 'A':'#9F1158'}
@@ -118,7 +116,10 @@ def create_testing_rate_plot(df, example_json, state, incremental):
 
     df = df[df['state_full'] == state]
     df = df.replace([np.inf, -np.inf], np.nan)
-    df = df.dropna()
+    df = df.fillna(0)
+
+    df[rate_metric] = np.where(df[rate_metric] >= 1, np.nan, df[rate_metric])
+
     out_json = copy.deepcopy(example_json["incremental_plots"]["testing_rate"])
 
     out_json['data'][0]["x"] = df["date"].tolist()
@@ -220,19 +221,23 @@ for state in state_list:
     out['state_name'] = state
     plots_for_dynamo.append(out)
 
+
+
+
+
 ##  AWS Stuff to create_plots
 #Using the resource here because it's less picky about datatypes.
     #client forces you to specify datatypes for each element
 #Delete old entries
-for state in state_list:
-    print("Removing old version of: " + state)
-    dynamodb_r.Table('bar_plots').delete_item(Key={"state_name":state})
 
 # Add New Entries
 for plot in plots_for_dynamo:
     state_name = plot['state_name']
-    print("Adding plot to bar_plots table:" + state_name)
-    dynamodb_r.Table('bar_plots').put_item(Item=plot)
+    print("Adding plot to bar_plots bucket:" + state_name)
+    s3.put_object(Bucket="us-corona-tracking-plots",
+                  Key=state_name+"_barplot.pkl",
+                  Body=pickle.dumps(plot))
+
 
 
 

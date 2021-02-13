@@ -22,7 +22,7 @@ testing_df = pd.read_csv("https://covidtracking.com/api/v1/states/daily.csv")
 testing_df['date'] = testing_df['date'].apply(fix_date)
 testing_df = testing_df[['date', 'state', 'positive',
                            'negative', 'positiveIncrease',
-                           'negativeIncrease','dataQualityGrade']]
+                           'negativeIncrease','dataQualityGrade', 'totalTestResults', 'totalTestResultsIncrease']]
 
 s3 = boto3.client('s3',
                   aws_access_key_id=AWS_KEY,

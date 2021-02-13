@@ -19,6 +19,8 @@ from urllib.request import urlopen
 import plotly.express as px
 import plotly.graph_objects as go
 
+import pickle
+
 # Dropdowns
 incrementals = ["Incremental", "Cumulative"]
 metrics_list = ["% Positive", "Confirmed Cases", "Deaths"]
@@ -38,8 +40,6 @@ AWS_SECRET=os.getenv('AWS_SECRET')
 
 
 
-AWS_KEY_DYNAMO=os.getenv('AWS_KEY_DYNAMO')
-AWS_SECRET_DYNAMO=os.getenv('AWS_SECRET_DYNAMO')
 
 s3 = boto3.client('s3',
                   aws_access_key_id=AWS_KEY,
@@ -47,14 +47,6 @@ s3 = boto3.client('s3',
                   region_name='us-east-2')
 
 
-dynamodb = boto3.client('dynamodb',
-                        aws_access_key_id=AWS_KEY_DYNAMO,
-                        aws_secret_access_key=AWS_SECRET_DYNAMO,
-                        region_name='us-east-2')
-dynamodb_r = boto3.resource('dynamodb',
-                            aws_access_key_id=AWS_KEY_DYNAMO,
-                            aws_secret_access_key=AWS_SECRET_DYNAMO,
-                            region_name='us-east-2')
 
 
 
@@ -114,7 +106,7 @@ app.layout = html.Div([
             dcc.Dropdown(
                 id='incremental-dropdown',
                 options=[{'label':incremental,'value':incremental} for incremental in incrementals],
-                value='Cumulative')
+                value='Incremental')
         ], className='incremental_dd_container'),
 
     ], className='row_three_container'),
@@ -196,10 +188,8 @@ def update_graph_testing_rate(incremental, state_filter):
     except TypeError:
         state_filter = "Countrywide"
 
-    table = dynamodb_r.Table('bar_plots')
-    bar_plots= table.query(
-            KeyConditionExpression=Key('state_name').eq(state_filter)
-    )['Items'][0]
+    bar_plots= s3.get_object(Bucket="us-corona-tracking-plots", Key=state_filter+"_barplot.pkl")
+    bar_plots = pickle.loads(bar_plots["Body"].read())
     incremental = str.lower(incremental) + "_plots"
     out = (bar_plots[incremental]["testing"],
            bar_plots[incremental]["confirmed"],
